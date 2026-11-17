@@ -1,0 +1,10 @@
+export const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "اسم-مشروعك.firebaseapp.com",
+  projectId: "اسم-مشروعك",
+  storageBucket: "اسم-مشروعك.firebasestorage.app",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123"
+};
+
+export const ADMIN_EMAIL = "ahmad2233@gmail.com";
