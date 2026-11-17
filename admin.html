@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>لوحة التحكم</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="login" hidden>
+    <h1>لوحة التحكم</h1>
+    <p class="sub">دخول الأستاذ فقط.</p>
+    <div class="card">
+      <input id="pw" type="password" placeholder="كلمة السر" autocomplete="current-password">
+      <div class="err" id="err" role="alert"></div>
+      <button id="go" style="width:100%">دخول</button>
+    </div>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="top"><h1>لوحة التحكم</h1><button class="ghost" id="out">خروج</button></div>
+    <div class="err" id="perr" role="alert"></div>
+
+    <h2>الطلاب الذين سجلوا الدخول</h2>
+    <div class="card" id="students"></div>
+
+    <h2>إضافة كتاب</h2>
+    <div class="card">
+      <input id="title" type="text" placeholder="اسم الكتاب">
+      <input id="link" type="text" placeholder="رابط الكتاب (Google Drive)" style="direction:ltr" autocomplete="off">
+      <p class="sub" style="font-size:14px;margin:4px 0">ارفع الـ PDF على Google Drive، ثم مشاركة، ثم "أي شخص لديه الرابط"، وانسخ الرابط هنا.</p>
+      <div class="err" id="uerr" role="alert"></div>
+      <button id="up">إضافة الكتاب</button>
+    </div>
+
+    <h2>الكتب</h2>
+    <div class="card" id="books"></div>
+
+    <h2>أكواد الدخول</h2>
+    <div class="card">
+      <input id="label" type="text" placeholder="ملاحظة (اسم الطالب أو الصف) - اختياري">
+      <input id="newcode" type="text" placeholder="كود مخصص (أو اتركه فارغاً)" style="direction:ltr" autocomplete="off">
+      <div class="err" id="cerr" role="alert"></div>
+      <button id="addcode">إنشاء كود</button>
+    </div>
+    <div class="card" id="codes" style="margin-top:12px"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script type="module">
+import { auth, db, $, firstUser, normCode, ADMIN_EMAIL, signInWithEmailAndPassword, signOut,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from './fb.js';
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3000);
+}
+const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+function genCode() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from(crypto.getRandomValues(new Uint8Array(8)), b => A[b % A.length]).join('');
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t);
+    t.select(); document.execCommand('copy'); t.remove();
+  }
+  toast('تم النسخ');
+}
+
+async function refresh() {
+  $('perr').textContent = '';
+  let books, codes, sessions;
+  try {
+    const [b, c, s] = await Promise.all([
+      getDocs(query(collection(db, 'books'), orderBy('createdAt', 'desc'))),
+      getDocs(collection(db, 'codes')),
+      getDocs(query(collection(db, 'sessions'), orderBy('at', 'desc')))
+    ]);
+    sessions = s.docs.map(d => ({ uid: d.id, ...d.data() }));
+    books = b.docs.map(d => ({ id: d.id, ...d.data() }));
+    codes = c.docs.map(d => ({ code: d.id, ...d.data() }));
+  } catch (e) {
+    $('perr').textContent = e && e.code === 'permission-denied'
+      ? 'هذا الحساب ليس أدمن. تأكد أن الـ UID في ملفي القواعد صحيح.'
+      : 'تعذر تحميل البيانات. أعد المحاولة.';
+    return;
+  }
+  const when = t => { try { const d = t && t.toDate ? t.toDate() : new Date(t);
+    return d.toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
+  const S = $('students'); S.innerHTML = sessions.length ? '' : '<p class="sub">لم يسجّل أي طالب دخوله بعد.</p>';
+  sessions.forEach(s => {
+    const c = codes.find(x => x.code === s.code);
+    const d = document.createElement('div'); d.className = 'row' + (c && c.active ? '' : ' off');
+    d.innerHTML = '<div><b></b><small style="display:block"></small></div><div class="acts"><button class="danger">إخراج</button></div>';
+    d.querySelector('b').textContent = s.name || '(بدون اسم)';
+    d.querySelector('small').textContent = 'الكود: ' + s.code + (c && c.label ? ' (' + c.label + ')' : '') +
+      (c && c.active ? '' : ' - متوقف') + ' · ' + when(s.at);
+    d.querySelector('button').onclick = async () => {
+      if (!confirm('إخراج ' + (s.name || 'هذا الطالب') + '؟ سيحتاج لتسجيل الدخول من جديد.')) return;
+      await deleteDoc(doc(db, 'sessions', s.uid)); refresh();
+    };
+    S.appendChild(d);
+  });
+  const B = $('books'); B.innerHTML = books.length ? '' : '<p class="sub">لا توجد كتب.</p>';
+  books.forEach(b => {
+    const d = document.createElement('div'); d.className = 'row';
+    d.innerHTML = '<div><b></b></div><div class="acts"><a class="btn ghost op" target="_blank" rel="noopener">فتح</a><button class="danger">حذف</button></div>';
+    d.querySelector('b').textContent = b.title;
+    d.querySelector('.op').href = b.url;
+    d.querySelector('button').onclick = async () => {
+      if (!confirm('حذف هذا الكتاب نهائياً؟')) return;
+      await deleteDoc(doc(db, 'books', b.id)); refresh();
+    };
+    B.appendChild(d);
+  });
+  const C = $('codes'); C.innerHTML = codes.length ? '' : '<p class="sub">لا توجد أكواد بعد.</p>';
+  codes.forEach(c => {
+    const d = document.createElement('div'); d.className = 'row' + (c.active ? '' : ' off');
+    d.innerHTML = '<div><code class="k"></code><small style="display:block"></small></div>' +
+      '<div class="acts"><button class="ghost cp">نسخ</button><a class="btn ghost sh" target="_blank" rel="noopener">واتساب</a>' +
+      '<button class="ghost tg"></button><button class="danger dl">حذف</button></div>';
+    d.querySelector('code').textContent = c.code;
+    d.querySelector('small').textContent = (c.label || '') + (c.active ? '' : ' (متوقف)');
+    d.querySelector('.cp').onclick = () => copy(c.code);
+    d.querySelector('.sh').href = 'https://wa.me/?text=' + encodeURIComponent(
+      'كود الدخول إلى مكتبة الكتب: ' + c.code + '\nالرابط: ' + location.origin + location.pathname.replace(/admin(\.html)?$/, ''));
+    const tg = d.querySelector('.tg'); tg.textContent = c.active ? 'إيقاف' : 'تفعيل';
+    tg.onclick = async () => { await updateDoc(doc(db, 'codes', c.code), { active: !c.active }); refresh(); };
+    d.querySelector('.dl').onclick = async () => {
+      if (!confirm('حذف الكود؟ سيفقد أصحابه الدخول.')) return;
+      await deleteDoc(doc(db, 'codes', c.code)); refresh();
+    };
+    C.appendChild(d);
+  });
+}
+
+async function upload() {
+  $('uerr').textContent = '';
+  const title = $('title').value.trim(), url = $('link').value.trim();
+  if (!title) { $('uerr').textContent = 'اكتب اسم الكتاب.'; return; }
+  if (!/^https:\/\/\S+$/.test(url)) { $('uerr').textContent = 'الصق رابطاً صحيحاً يبدأ بـ https://'; return; }
+  $('up').disabled = true;
+  try {
+    await setDoc(doc(db, 'books', rid()), { title, url, createdAt: serverTimestamp() });
+    $('title').value = ''; $('link').value = '';
+    toast('تمت الإضافة');
+  } catch (e) {
+    $('uerr').textContent = e && e.code === 'permission-denied'
+      ? 'غير مسموح. تأكد من الـ UID في القواعد.' : 'فشلت الإضافة. أعد المحاولة.';
+  }
+  $('up').disabled = false;
+  refresh();
+}
+
+async function addCode() {
+  $('cerr').textContent = '';
+  let code = normCode($('newcode').value);
+  if (code && !/^[\p{L}\p{N}_-]{3,40}$/u.test(code)) {
+    $('cerr').textContent = 'الكود: حروف وأرقام فقط (3 إلى 40 خانة).'; return;
+  }
+  try {
+    if (!code) { do { code = genCode(); } while ((await getDoc(doc(db, 'codes', code))).exists()); }
+    else if ((await getDoc(doc(db, 'codes', code))).exists()) { $('cerr').textContent = 'هذا الكود موجود مسبقاً.'; return; }
+    await setDoc(doc(db, 'codes', code), { label: $('label').value.trim(), active: true, createdAt: serverTimestamp() });
+  } catch (e) { $('cerr').textContent = 'تعذر إنشاء الكود. أعد المحاولة.'; return; }
+  $('newcode').value = ''; $('label').value = '';
+  toast('تم إنشاء الكود ' + code);
+  refresh();
+}
+
+async function login() {
+  $('err').textContent = '';
+  $('go').disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, $('pw').value);
+    show(true);
+  } catch (e) {
+    const c = e && e.code;
+    $('err').textContent =
+      c === 'auth/too-many-requests' ? 'محاولات كثيرة. انتظر قليلاً ثم حاول.' :
+      c === 'auth/operation-not-allowed' ? 'فعّل Email/Password في Firebase Authentication.' :
+      c === 'auth/network-request-failed' ? 'تعذر الاتصال بالإنترنت.' :
+      'كلمة السر غير صحيحة.';
+  }
+  $('go').disabled = false;
+}
+
+function show(isAdminUser) {
+  $('login').hidden = isAdminUser; $('panel').hidden = !isAdminUser;
+  if (isAdminUser) refresh();
+}
+
+$('go').onclick = login;
+$('pw').onkeydown = e => { if (e.key === 'Enter') login(); };
+$('out').onclick = async () => { await signOut(auth); location.reload(); };
+$('up').onclick = upload;
+$('addcode').onclick = addCode;
+firstUser().then(u => show(!!(u && !u.isAnonymous)));
+setInterval(() => { if (!$('panel').hidden && !document.hidden) refresh(); }, 20000);
+</script>
+</body>
+</html>

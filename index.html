@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مكتبة الكتب</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="login" hidden>
+    <h1>مكتبة الكتب</h1>
+    <p class="sub">سجّل دخولك بالاسم وكود الدخول الذي أعطاك إياه الأستاذ.</p>
+    <div class="card">
+      <input id="name" type="text" placeholder="اسمك" autocomplete="name" maxlength="50">
+      <input id="code" type="text" placeholder="الكود" autocomplete="off" autocapitalize="characters" spellcheck="false" style="direction:ltr;text-align:center;font-size:20px;letter-spacing:3px">
+      <div class="err" id="err" role="alert"></div>
+      <button id="go" style="width:100%">تسجيل الدخول</button>
+    </div>
+  </div>
+  <div id="lib" hidden>
+    <div class="top"><h1>الكتب</h1><button class="ghost" id="out">خروج</button></div>
+    <p class="sub" id="hello"></p>
+    <div class="card" id="list"></div>
+  </div>
+  <p class="sub" id="loading">جاري التحميل...</p>
+</div>
+
+<a id="wa" class="wa" target="_blank" rel="noopener"
+   href="https://wa.me/963968103758?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%20%D8%A3%D8%B3%D8%AA%D8%A7%D8%B0%D8%8C%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D9%83%D9%88%D8%AF%20%D8%A7%D9%84%D8%AF%D8%AE%D9%88%D9%84%20%D8%A5%D9%84%D9%89%20%D9%85%D9%83%D8%AA%D8%A8%D8%A9%20%D8%A7%D9%84%D9%83%D8%AA%D8%A8">
+  تواصل مع الأستاذ عبر واتساب
+</a>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script type="module">
+import { auth, db, $, firstUser, normCode, signInAnonymously,
+  collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, orderBy, serverTimestamp } from './fb.js';
+
+let user = null, myName = '', busy = false;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 4000);
+}
+const isDenied = e => !!e && e.code === 'permission-denied';
+function view(v) { $('loading').hidden = true; $('login').hidden = v !== 'login'; $('lib').hidden = v !== 'lib'; }
+function showLogin(msg) { view('login'); $('err').textContent = msg || ''; }
+
+function render(books) {
+  const L = $('list'); L.innerHTML = '';
+  if (!books.length) { L.innerHTML = '<p class="sub">لا توجد كتب حالياً.</p>'; return; }
+  books.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'book'; btn.type = 'button';
+    const t = document.createElement('span'); t.textContent = b.title;
+    btn.append(t);
+    btn.onclick = () => openBook(b);
+    L.appendChild(btn);
+  });
+}
+
+async function loadBooks() {
+  const snap = await getDocs(query(collection(db, 'books'), orderBy('createdAt', 'desc')));
+  render(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  $('hello').textContent = myName ? 'أهلاً ' + myName : '';
+  view('lib');
+}
+
+async function openBook(book) {
+  if (busy) return;
+  busy = true;
+  const w = window.open('', '_blank');           // يجب أن يُفتح أثناء ضغطة المستخدم
+  try { if (w) w.document.write('<p dir="rtl" style="font-family:sans-serif;padding:24px">جاري فتح الكتاب...</p>'); } catch (_) {}
+  try {
+    const snap = await getDoc(doc(db, 'books', book.id));   // يتأكد أن الكود ما زال فعّالاً
+    if (!snap.exists()) throw { code: 'not-found' };
+    const url = snap.data().url;
+    if (w && !w.closed) w.location.href = url; else location.href = url;
+  } catch (e) {
+    if (w) try { w.close(); } catch (_) {}
+    if (isDenied(e)) showLogin('انتهت صلاحية دخولك أو تم إيقاف الكود. سجّل الدخول من جديد.');
+    else if (e && e.code === 'not-found') { toast('هذا الكتاب لم يعد متوفراً.'); loadBooks().catch(() => {}); }
+    else toast('تعذر فتح الكتاب. تأكد من الاتصال بالإنترنت وحاول مجدداً.');
+  }
+  busy = false;
+}
+
+async function login() {
+  const name = $('name').value.trim().replace(/\s+/g, ' ');
+  const code = normCode($('code').value);
+  if (!name) { $('err').textContent = 'اكتب اسمك.'; return; }
+  if (!code) { $('err').textContent = 'أدخل الكود.'; return; }
+  if (!user) { $('err').textContent = 'جاري الاتصال، حاول بعد لحظة.'; return; }
+  $('go').disabled = true; $('err').textContent = '';
+  try {
+    await setDoc(doc(db, 'sessions', user.uid), { code, name, at: serverTimestamp() });
+    myName = name;
+    await loadBooks();
+  } catch (e) {
+    $('err').textContent = e && e.code === 'permission-denied'
+      ? 'الكود غير صحيح أو متوقف.' : 'تعذر الاتصال. تأكد من الإنترنت وحاول مجدداً.';
+  }
+  $('go').disabled = false;
+}
+
+async function logout() {
+  try { await deleteDoc(doc(db, 'sessions', user.uid)); } catch (_) {}
+  $('code').value = ''; showLogin();
+}
+
+async function init() {
+  try {
+    user = await firstUser();
+    if (!user) user = (await signInAnonymously(auth)).user;
+  } catch (e) { showLogin('تعذر الاتصال بالخادم.'); return; }
+  if (!user.isAnonymous) { try { await loadBooks(); return; } catch (_) {} }   // حساب الأدمن
+  try {
+    const s = await getDoc(doc(db, 'sessions', user.uid));
+    if (s.exists()) { myName = s.data().name || ''; await loadBooks(); return; }
+  } catch (e) { /* الكود لم يعد صالحاً */ }
+  showLogin();
+}
+
+$('go').onclick = login;
+$('code').onkeydown = e => { if (e.key === 'Enter') login(); };
+$('name').onkeydown = e => { if (e.key === 'Enter') $('code').focus(); };
+$('out').onclick = logout;
+init();
+</script>
+</body>
+</html>
