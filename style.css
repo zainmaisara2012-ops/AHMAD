@@ -1,0 +1,39 @@
+:root{--bg:#eef1f5;--card:#fff;--ink:#14212b;--mut:#5d6b78;--acc:#0f4c5c;--on:#fff;--line:#d6dde4;--bad:#b3261e;--ok:#1b7a4b}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--card:#18222a;--ink:#e8eef2;--mut:#93a3af;--acc:#5fb3c6;--on:#08222a;--line:#2a3944;--bad:#ff8a80;--ok:#6fd3a0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Tajawal','Cairo',system-ui,sans-serif;font-size:17px;line-height:1.6}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 120px}
+h1{font-size:28px;margin:8px 0 4px}h2{font-size:20px;margin:28px 0 10px}
+p.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+input[type=text],input[type=password],input[type=file]{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin:6px 0}
+button,.btn{background:var(--acc);color:var(--on);border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+button:disabled{opacity:.6;cursor:wait}
+button.ghost,.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--line)}
+button.danger{background:transparent;color:var(--bad);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.row:last-child{border-bottom:0}
+.row b{display:block}.row small{color:var(--mut);direction:ltr;unicode-bidi:plaintext}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.err{color:var(--bad);min-height:24px;margin:6px 0}
+.top{display:flex;justify-content:space-between;align-items:center}
+code.k{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:2px;direction:ltr;display:inline-block}
+.off{opacity:.5}
+/* قائمة الكتب للطلاب */
+.book{all:unset;box-sizing:border-box;display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line);cursor:pointer;font-size:18px}
+.book:last-child{border-bottom:0}
+.book:hover,.book:focus-visible{background:var(--bg)}
+.book:focus-visible{outline:3px solid var(--acc)}
+.book small{color:var(--mut);font-size:14px;white-space:nowrap;direction:ltr}
+/* نافذة الكود */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.ov[hidden]{display:none}
+.modal{background:var(--card);border-radius:12px;padding:20px;width:100%;max-width:400px}
+.modal h2{margin:0 0 4px}
+/* زر واتساب */
+.wa{position:fixed;bottom:16px;inset-inline:16px;max-width:420px;margin-inline:auto;background:#128c4a;color:#fff;text-align:center;border-radius:999px;padding:14px 20px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:10}
+.wa:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.wa.inline{position:static;display:block;max-width:none;box-shadow:none;border-radius:8px;margin-top:12px;padding:11px}
+.toast{position:fixed;top:16px;inset-inline:16px;margin-inline:auto;max-width:420px;background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:8px;z-index:30}
+.toast[hidden]{display:none}
