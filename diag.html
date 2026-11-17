@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>فحص الاتصال</title>
+</head>
+<body style="font-family:sans-serif;padding:16px;line-height:1.7">
+<h2>فحص الاتصال</h2>
+<p>انتظر ثواني ثم صوّر الشاشة وابعتها.</p>
+<pre id="o" style="white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;background:#eee;padding:12px;border-radius:8px">running...</pre>
+<script type="module">
+const o = document.getElementById('o'); let out = '';
+const log = t => { out += t + '\n'; o.textContent = out; };
+window.addEventListener('error', e => log('PAGE ERROR: ' + e.message));
+window.addEventListener('unhandledrejection', e => log('REJECTION: ' + (e.reason && e.reason.message || e.reason)));
+log('online: ' + navigator.onLine);
+let c;
+try { c = (await import('./firebase-config.js')).firebaseConfig; }
+catch (e) { log('FAIL loading firebase-config.js: ' + e.message); throw e; }
+log('projectId: ' + c.projectId);
+log('authDomain: ' + c.authDomain);
+log('apiKey: ' + String(c.apiKey).slice(0, 8) + '...');
+async function reach(name, url) {
+  try { await fetch(url, { mode: 'no-cors' }); log('OK   reach ' + name); }
+  catch (e) { log('FAIL reach ' + name + ' : ' + e.message); }
+}
+await reach('gstatic', 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+await reach('identitytoolkit', 'https://identitytoolkit.googleapis.com/');
+await reach('securetoken', 'https://securetoken.googleapis.com/');
+await reach('firestore', 'https://firestore.googleapis.com/');
+try {
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(c.apiKey), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ returnSecureToken: true })
+  });
+  const t = await r.text();
+  log('anonymous signUp: HTTP ' + r.status);
+  log(t.replace(/"(idToken|refreshToken)":\s*"[^"]+"/g, '"$1":"..."').slice(0, 500));
+} catch (e) { log('FAIL anonymous signUp: ' + e.message); }
+log('DONE');
+</script>
+</body>
+</html>
